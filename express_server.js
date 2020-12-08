@@ -62,8 +62,22 @@ app.get("/u/:shortURL", (req, res) => {
   res.redirect(longURL);
 });
 
+app.get("/login", (req, res) => {
+  let user_id = req.session.user_id;
+  res.render("login", {user: users[user_id]});
+});
+
+app.get("/urls/:shortURL", (req, res) => {
+  let shortURL = req.params.shortURL;
+  urlDatabase[shortURL] = req.body.longURL;
+  console.log(urlDatbase[shortURL]);
+  res.redirect("/urls_show");
+});
+
+
 app.post("/urls/:shortURL/delete", (req, res) => {
   let shortURL = req.params.shortURL;
   delete urlDatabase[req.params.shortURL];
   res.redirect("/urls");
 });
+
