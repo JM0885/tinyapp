@@ -7,7 +7,7 @@
 </head>
 
 <body>
-  <% include ./_header %>
+  <%- include('partials/_header') %>
 
   <div class="card text-center">
       <div class="card-header"></div>
@@ -31,11 +31,6 @@
                 </div>
                 <input name="password" type="password" placeholder="&emsp;&emsp;Password" />
               </div>
-              <% if(typeof(errorMessage) !== "undefined") { %>
-                <div class="input-group mb-3">
-                  <span style="text-align: center; color:red; margin: 3em auto 3em auto"><%= errorMessage %> </span>
-                </div>
-              <%} %>
               <button class="btn btn-primary" type="submit">Login</button>
             </form>
           </p>
