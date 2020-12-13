@@ -4,12 +4,14 @@ const cookieSession = require('cookie-session');
 const app = express();
 const PORT = 8080;
 const bodyParser = require("body-parser");
+const bcrypt = require('bcrypt');
+
 app.use(bodyParser.urlencoded({extended: true}));
+
 app.use(cookieSession({
   name: 'session',
   secret: 'asdfghjkl'
 }));
-const bcrypt = require('bcrypt');
 app.set("view engine", "ejs");
 
 const generateRandomString = () => {
@@ -28,8 +30,8 @@ const userUrls = (user_id) => {
 
 //URL database
 const urlDatabase = {
-  b6UTxQ: { longURL: "https://www.tsn.ca", userID: "aJ48lW" },
-  i3BoGr: { longURL: "https://www.google.ca", userID: "aJ48lW" }
+  b6UTxQ: { longURL: "https://www.tsn.ca", user_id: "aJ48lW" },
+  i3BoGr: { longURL: "https://www.google.ca", user_id: "aJ48lW" }
 };
 
 //user database
@@ -46,14 +48,8 @@ const users = {
   }
 };
 
-//Establish server connection
-app.listen(PORT, () => {
-  console.log(`TinyApp server listening on port ${PORT}!`);
-});
-
-//Get JSON
-app.get("/urls.json", (req, res) => {
-  res.json(urlDatabase);
+app.get("/", (req, res) => {
+  res.redirect("/register");
 });
 
 //Main page of app
@@ -105,9 +101,13 @@ app.get("/urls/:shortURL", (req, res) => {
     user_id: req.session.user_id,
     email: req.session["email"]
   };
+  if (!req.session["user_id"]) {
+    res.status(400).send("Please login.")
+  } else {
   res.render("urls_show", templateVars);
-
+  }
 });
+
 //User login
 app.get("/login", (req, res) => {
   let user_id = req.session.user_id;
@@ -131,13 +131,12 @@ app.post("/register", (req, res) => {
     res.status(400).send("Please login.");
   } else {
     users[id] = newUser;
-    console.log(req.session);
     req.session.user_id = id;
     res.redirect("/urls");
   }
 });
 
-//Use POST method to create shortURL, and set longURL, then redirect
+//Use POST method to create shortURL, and add user data
 app.post("/urls", (req, res) => {
   const shortURL = generateRandomString();
   const longURL = req.body.longURL;
@@ -155,14 +154,14 @@ app.post("/urls", (req, res) => {
   }
 });
 
-//Update and redirect
+//Update functionality then redirect
 app.post("/urls/:shortURL", (req, res) => {
-  let shortURL = req.params.id;
+  let shortURL = req.params.shortURL;
   if (!req.session["user_id"]) {
     res.redirect("/urls");
   } else if (urlDatabase[shortURL].user_id === req.session["user_id"]) {
-    urlDatabase[req.params.id].longURL = req.body.longURL;
-    res.redirect("/urls");
+    urlDatabase[req.params.shortURL].longURL = req.body.longURL;
+    res.redirect("/urls/");
   } else {
     res.redirect("/urls");
   }
@@ -194,12 +193,24 @@ app.post("/logout", (req, res) => {
 
 //DELETE POST
 app.post("/urls/:shortURL/delete", (req, res) => {
-  let shortURL = req.params.id;
+  let shortURL = req.params.shortURL;
   if (urlDatabase[shortURL].user_id === req.session["user_id"]) {
-    delete urlDatabase[req.params.id];
+    delete urlDatabase[req.params.shortURL];
     res.redirect("/urls");
   } else {
     res.redirect("/urls");
   }
 });
 
+//Establish server connection
+app.listen(PORT, () => {
+  console.log(`TinyApp server listening on port ${PORT}!`);
+});
+
+//Get JSON
+app.get("/urls.json", (req, res) => {
+  res.json(urlDatabase);
+});
+app.get("/users.json", (req, res) => {
+  res.json(users);
+});
