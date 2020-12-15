@@ -1,10 +1,10 @@
 const express = require("express");
-const helpers = require("./helpers");
-const cookieSession = require('cookie-session');
 const app = express();
+const helpers = require("./helpers");
+const bcrypt = require('bcrypt');
+const cookieSession = require('cookie-session');
 const PORT = 8080;
 const bodyParser = require("body-parser");
-const bcrypt = require('bcrypt');
 
 app.use(bodyParser.urlencoded({extended: true}));
 
@@ -19,7 +19,7 @@ const generateRandomString = () => {
   return output;
 };
 
-const userUrls = (user_id) => {
+const userUrlsFnc = (user_id) => {
   let userURLS = {};
   for (let key in urlDatabase)
     if (urlDatabase[key].user_id === user_id) {
@@ -30,8 +30,8 @@ const userUrls = (user_id) => {
 
 //URL database
 const urlDatabase = {
-  b6UTxQ: { longURL: "https://www.tsn.ca", user_id: "aJ48lW" },
-  i3BoGr: { longURL: "https://www.google.ca", user_id: "aJ48lW" }
+  b6UTxQ: { longURL: "https://www.tsn.ca", user_id: "userRandomID" },
+  i3BoGr: { longURL: "https://www.google.ca", user_id: "userRandomID" }
 };
 
 //user database
@@ -49,7 +49,7 @@ const users = {
 };
 
 app.get("/", (req, res) => {
-  res.redirect("/register");
+  res.redirect("/login");
 });
 
 //Main page of app
@@ -58,7 +58,7 @@ app.get("/urls", (req, res) => {
   let templateVars = {
     user_id,
     user: users[user_id],
-    urlDatabase: userUrls(user_id)
+    urlDatabase: userUrlsFnc(user_id)
   };
   if (!user_id) {
     res.status(400).send("Please login.");
@@ -68,10 +68,11 @@ app.get("/urls", (req, res) => {
 });
 
 //Create a new page with form for user to submit
+//New page
 app.get("/urls/new", (req, res) => {
   let user_id = req.session.user_id;
   if (user_id) {
-    let templateVars = { user_id, user: users[user_id] };
+    let templateVars = { user_id: user_id, user: users[user_id] };
     res.render("urls_new", templateVars);
   } else {
     res.redirect("/login");
@@ -87,25 +88,33 @@ app.get("/register", (req, res) => {
 app.get("/u/:shortURL", (req, res) => {
   let shortURL = req.params.shortURL;
   let longURL = urlDatabase[shortURL].longURL;
+  if (!longURL) {
+    res.status(403).send("No URL with that ID exists.")
+    } else {
   res.redirect(longURL);
+ }
 });
 
 //Send user to edit page if user is logged in
 app.get("/urls/:shortURL", (req, res) => {
   let user_id = req.session.user_id;
   let shortURL = req.params.shortURL;
-  let templateVars = {
-    shortURL: shortURL,
+  if (!req.session.user_id) {
+    res.status(403).send("Please login.")
+    return;
+  } 
+  if (!urlDatabase[shortURL]) {
+    res.status(404).send("No URL with that ID exists.")
+    return;
+  }
+  const templateVars = {
+    shortURL,
     user: users[user_id],
     longURL: urlDatabase[shortURL].longURL,
     user_id: req.session.user_id,
-    email: req.session["email"]
+    email: req.session.email,
   };
-  if (!req.session["user_id"]) {
-    res.status(400).send("Please login.")
-  } else {
   res.render("urls_show", templateVars);
-  }
 });
 
 //User login
@@ -142,13 +151,17 @@ app.post("/urls", (req, res) => {
   const longURL = req.body.longURL;
   let user_id = req.session.user_id;
   let mainObject = {
-    longURL: longURL,
+    longURL,
     user_id,
     user: users[user_id],
   };
+  if (!user_id) {
+    res.status(403).send("Please login.");
+    return;
+  }
   if (longURL) {
     urlDatabase[shortURL] = mainObject;
-    res.redirect("/urls");
+    res.redirect(`/urls/${shortURL}`);
   } else {
     res.status(403).send("Invalid entry");
   }
@@ -157,10 +170,11 @@ app.post("/urls", (req, res) => {
 //Update functionality then redirect
 app.post("/urls/:shortURL", (req, res) => {
   let shortURL = req.params.shortURL;
+  let longURL = req.body.longURL;
   if (!req.session["user_id"]) {
     res.redirect("/urls");
   } else if (urlDatabase[shortURL].user_id === req.session["user_id"]) {
-    urlDatabase[req.params.shortURL].longURL = req.body.longURL;
+    urlDatabase[req.params.shortURL].longURL = longURL;
     res.redirect("/urls/");
   } else {
     res.redirect("/urls");
@@ -180,7 +194,7 @@ app.post("/login", (req, res) => {
   if (!bcrypt.compareSync(password, userObject.password)) {
     res.status(403).send("Username or password do not match.");
   } else {
-    req.session.user_id = userObject["id"];
+    req.session.user_id = userObject.user_id;
     res.redirect("/urls");
   }
 });
@@ -194,23 +208,23 @@ app.post("/logout", (req, res) => {
 //DELETE POST
 app.post("/urls/:shortURL/delete", (req, res) => {
   let shortURL = req.params.shortURL;
-  if (urlDatabase[shortURL].user_id === req.session["user_id"]) {
-    delete urlDatabase[req.params.shortURL];
-    res.redirect("/urls");
-  } else {
-    res.redirect("/urls");
+  const url = urlDatabase[shortURL];
+  const user_id = req.session.user_id;
+  const user = users[user_id];
+  if (!user) {
+    res.status(403).send("Request to delete URL denied.")
+    return;
   }
+  if (user_id !== urlDatabase[shortURL].user_id) {
+    res.status(403).send("Request to delete URL denied.")
+    return;
+  }
+  delete urlDatabase[shortURL];
+  res.redirect("/urls");
 });
+
 
 //Establish server connection
 app.listen(PORT, () => {
   console.log(`TinyApp server listening on port ${PORT}!`);
-});
-
-//Get JSON
-app.get("/urls.json", (req, res) => {
-  res.json(urlDatabase);
-});
-app.get("/users.json", (req, res) => {
-  res.json(users);
 });
